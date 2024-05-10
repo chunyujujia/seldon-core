@@ -169,12 +169,6 @@ func (r *SeldonRuntimeReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return reconcile.Result{}, err
 	}
 
-	if seldonRuntime.Status.IsConditionReady(mlopsv1alpha1.SchedulerReady) {
-		if err := r.Scheduler.KeepConnection(seldonRuntime.Namespace); err != nil {
-			return reconcile.Result{}, err
-		}
-	}
-
 	return ctrl.Result{}, nil
 }
 
