@@ -175,7 +175,7 @@ func filterReplicas(filters []filters.ReplicaFilter, model *store.ModelVersion, 
 
 // simulate the process of server replicas scaling down to determine whether there is enough memory
 func (scaler *memoryServerScaler) checkAvaliableMemory(server *store.ServerSnapshot, replicas int) error {
-	simulateRecord := SimulateRecord{server: server}
+	simulateRecord := SimulateRecord{server: server, reservedMemory: map[int]uint64{}}
 	defer simulateRecord.ReleaseReservedMemory()
 
 	scaleDownReplicaIdx := server.ExpectedReplicas - 1
