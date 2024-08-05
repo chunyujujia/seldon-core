@@ -216,7 +216,16 @@ func (m Model) AsSchedulerModel() (*scheduler.Model, error) {
 	if m.Spec.Replicas != nil {
 		md.DeploymentSpec.Replicas = uint32(*m.Spec.Replicas)
 	} else {
-		if m.Spec.MinReplicas != nil {
+		if m.Status.Replicas != 0 {
+			replicas := uint32(m.Status.Replicas)
+			if m.Spec.MinReplicas != nil && replicas < uint32(*m.Spec.MinReplicas){
+				replicas = uint32(*m.Spec.MinReplicas)
+			}
+			if m.Spec.MaxReplicas != nil && replicas > uint32(*m.Spec.MaxReplicas){
+				replicas = uint32(*m.Spec.MaxReplicas)
+			}
+			md.DeploymentSpec.Replicas = replicas
+		} else if m.Spec.MinReplicas != nil {
 			// set replicas to the min replicas if not set
 			md.DeploymentSpec.Replicas = uint32(*m.Spec.MinReplicas)
 		} else {
