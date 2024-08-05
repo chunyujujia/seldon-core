@@ -1,5 +1,5 @@
 mlserver:
-  replicas: 1
+  replicas: 0
 
 triton:
   replicas: 1

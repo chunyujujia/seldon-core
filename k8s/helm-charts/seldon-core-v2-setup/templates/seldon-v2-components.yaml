@@ -1465,6 +1465,7 @@ spec:
       rclone:
         config_secrets:
         - seldon-rclone-gs-public
+        - alicloud-oss-secret
     kafkaConfig:
       bootstrap.servers: '{{ .Values.kafka.bootstrap }}'
       consumer:
@@ -1890,7 +1891,8 @@ spec:
       - -c
       - tritonserver --model-repository=$(SERVER_MODELS_DIR) --http-port=$(SERVER_HTTP_PORT)
         --grpc-port=$(SERVER_GRPC_PORT) --log-verbose=1 --model-control-mode=explicit
-        --backend-config=python,shm-default-byte-size=16777216
+        --backend-config=python,shm-default-byte-size=16777216 --rate-limit=execution_count
+        --rate-limit-resource=R1:16
       command:
       - bash
       env:

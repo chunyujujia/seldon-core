@@ -2,14 +2,14 @@ disableAutoUpdate: false
 seldonConfig: default
 
 hodometer:
-  disable: false
+  disable: true
   replicas: 1
   
 scheduler:
   disable: false
   replicas: 1
   # controlplane exposure
-  serviceType: LoadBalancer 
+  serviceType: ClusterIP
   
 envoy:
   disable: false
@@ -18,15 +18,15 @@ envoy:
   serviceType: LoadBalancer 
   
 dataflow:
-  disable: false
+  disable: true
   replicas: 1
   
 modelgateway:
-  disable: false
+  disable: true
   replicas: 1
   
 pipelinegateway:
-  disable: false
+  disable: true
   replicas: 1
 
 config:
@@ -40,7 +40,7 @@ config:
     producer:
     streams:
   tracingConfig:
-    disable:
+    disable: true
     otelExporterEndpoint:
     otelExporterProtocol:
     ratio:
