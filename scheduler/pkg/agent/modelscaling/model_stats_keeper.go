@@ -108,15 +108,16 @@ func (keeper *modelStatsKeeper) getAllGte(threshold uint32, reset bool) ([]*inte
 
 	for k, v := range keeper.stats {
 		statValue := uint32(v.Get())
+		if reset {
+			v.Reset()
+		}
 		if statValue >= threshold {
 			rets = append(rets, &interfaces.ModelStatsKV{
 				ModelName: k,
 				Value:     statValue,
 				Key:       keeper.key,
 			})
-			if reset {
-				v.Reset()
-			}
+			
 		}
 	}
 	return rets, nil
