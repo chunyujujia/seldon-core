@@ -1,10 +1,16 @@
-FROM golang:1.20-alpine as builder
+FROM uhub.service.ucloud.cn/ainnovation/golang:1.20-alpine as builder
 
 WORKDIR /build
+
+RUN go env -w GO111MODULE=on \
+    && go env -w GOPROXY=https://goproxy.cn,direct \
+    && go env -w CGO_ENABLED=0 \
+    && go env 
+RUN apk add --no-cache make
+
 COPY . .
 
 # Build the binary
-RUN apk add --no-cache make
 RUN make -C scheduler -o test-go build-agent
 
 # Copy binary
