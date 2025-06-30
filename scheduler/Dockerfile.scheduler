@@ -1,10 +1,15 @@
-FROM golang:1.20-bullseye as builder
+FROM uhub.service.ucloud.cn/ainnovation/golang:1.20-bullseye as builder
+
+RUN apt-get install make
+
+RUN go env -w GO111MODULE=on \
+    && go env -w GOPROXY=https://goproxy.cn,direct \
+    && go env -w CGO_ENABLED=0 \
+    && go env 
 
 WORKDIR /build
-COPY . .
-
 # Build the binary
-RUN apt-get install make
+COPY . .
 RUN make -C scheduler -o test-go build-scheduler
 
 # Kafka dependencies necessitate leaving CGo enabled and using a base image with C dependencies
