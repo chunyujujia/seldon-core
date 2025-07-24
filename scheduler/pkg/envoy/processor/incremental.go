@@ -208,7 +208,7 @@ func (p *IncrementalProcessor) newSnapshotVersion() string {
 }
 
 func (p *IncrementalProcessor) updateEnvoy() error {
-	logger := p.logger.WithField("func", "updateEnvoy")
+	// logger := p.logger.WithField("func", "updateEnvoy")
 	// Create the snapshot that we'll serve to Envoy
 	snapshot, err := cache.NewSnapshot(
 		p.newSnapshotVersion(), // version
@@ -225,7 +225,7 @@ func (p *IncrementalProcessor) updateEnvoy() error {
 	if err := snapshot.Consistent(); err != nil {
 		return err
 	}
-	logger.Debugf("will serve snapshot %+v", snapshot)
+	// logger.Debugf("will serve snapshot %+v", snapshot)
 
 	// Add the snapshot to the cache
 	if err := p.cache.SetSnapshot(context.Background(), p.nodeID, snapshot); err != nil {

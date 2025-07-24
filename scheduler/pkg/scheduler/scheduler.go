@@ -139,7 +139,7 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 	} else {
 		// Model needs to be (re)scheduled
 		var filteredServers []*store.ServerSnapshot
-		
+
 		// Get all servers
 		servers, err := s.store.GetServers(false, true)
 		if err != nil {
@@ -176,6 +176,8 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 
 				if s.scaler.Scalable(candidateServer.Name, scaleToReplicas, latestModel) {
 					logger.Debugf("scale up server %s to %d replicas for model %s", candidateServer.Name, scaleToReplicas, modelName)
+					logger.Debugf("server snapshot: %v", candidateServer)
+					logger.Debugf("candidate replicas: %v", candidateReplicas)
 					s.store.UpdateServerScaleToReplicas(candidateServer.Name, int32(scaleToReplicas))
 					s.muSortAndUpdate.Unlock()
 					break
@@ -183,13 +185,19 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 
 				s.muSortAndUpdate.Unlock()
 				logger.Debugf("cann't scale up server %s to %d replicas for model %s", candidateServer.Name, scaleToReplicas, latestModel.GetMeta().Name)
-				
+
 				continue
 			}
 			candidateReplicas.SortReplicas(s.replicaSorts)
+			// 临时debug用的日志
+			if strings.Contains(modelName, "recapture-segment") {
+				for _, rep := range candidateReplicas.ChosenReplicas {
+					logger.Debugf("candidate replicas: %+v", rep)
+				}
+			}
 			err = s.store.UpdateLoadedModels(
-				modelName, latestModel.GetVersion(), 
-				candidateServer.Name, 
+				modelName, latestModel.GetVersion(),
+				candidateServer.Name,
 				candidateReplicas.ChosenReplicas[0:latestModel.DesiredReplicas()])
 			s.muSortAndUpdate.Unlock()
 
@@ -201,7 +209,7 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 				break
 			}
 		}
-	
+
 		if !ok {
 			msg := "Failed to schedule model as no matching server had enough suitable replicas"
 			logger.Debug(msg)
