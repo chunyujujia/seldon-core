@@ -4,7 +4,7 @@ RUN apt-get install make
 
 RUN go env -w GO111MODULE=on \
     && go env -w GOPROXY=https://goproxy.cn,direct \
-    && go env -w CGO_ENABLED=0 \
+    # && go env -w CGO_ENABLED=0 \
     && go env 
 
 WORKDIR /build
