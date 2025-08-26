@@ -555,7 +555,7 @@ func createScalingPseudoRequest(message *pb.ModelScalingTriggerMessage, model *s
 
 	if tryScaleDown {
 		if !isModelStable(lastModelVersion) {
-			return nil, fmt.Errorf("Model %s has changed status recently, skip scaling", modelName)
+			return nil, fmt.Errorf("model %s isn't stable, skip scaling down", modelName)
 		}
 	}
 
@@ -568,7 +568,9 @@ func createScalingPseudoRequest(message *pb.ModelScalingTriggerMessage, model *s
 }
 
 func isModelStable(modelVersion *store.ModelVersion) bool {
-	return modelVersion.ModelState().Timestamp.Before(time.Now().Add(-modelScalingCoolingDownSeconds * time.Second))
+	state := modelVersion.ModelState()
+	return state.State != store.ModelProgressing && state.State != store.ModelTerminating &&
+		modelVersion.ModelState().Timestamp.Before(time.Now().Add(-modelScalingCoolingDownSeconds*time.Second))
 }
 
 func calculateDesiredNumReplicas(model *pbs.Model, trigger pb.ModelScalingTriggerMessage_Trigger, numReplicas int) (int, error) {
