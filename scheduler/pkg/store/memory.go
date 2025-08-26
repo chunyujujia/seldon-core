@@ -487,6 +487,11 @@ func (m *MemoryStore) updateModelStateImpl(
 	existingState := modelVersion.GetModelReplicaState(replicaIdx)
 
 	if existingState != expectedState {
+		// release reserved memory when state mismatch
+		if expectedState == Loading {
+			m.logger.Debugf("release reserved memory for model %s becausee of state mismatch", modelKey)
+			m.updateReservedMemory(LoadFailed, serverKey, replicaIdx, modelVersion.GetRequiredMemory())
+		}
 		return nil, fmt.Errorf(
 			"State mismatch for %s:%d expected state %s but was %s when trying to move to state %s",
 			modelKey, version, expectedState.String(), existingState.String(), desiredState.String(),
@@ -547,10 +552,13 @@ func (m *MemoryStore) updateReservedMemory(
 	if ok {
 		replica, okReplica := server.replicas[replicaIdx]
 		if okReplica {
-			if modelReplicaState == LoadRequested {
+			switch modelReplicaState {
+			case LoadRequested:
 				replica.UpdateReservedMemory(memBytes, true)
-			} else if modelReplicaState == LoadFailed || modelReplicaState == Loaded {
+			case LoadFailed, Loaded:
+				m.logger.Debugf("replica %d release reserved memory %d ", replicaIdx, memBytes)
 				replica.UpdateReservedMemory(memBytes, false)
+			case Unloaded:
 			}
 		}
 	}
