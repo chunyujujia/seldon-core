@@ -25,6 +25,11 @@ type fakeModelStore struct {
 	status map[string]store.ModelState
 }
 
+// UpdateGpuUsage implements store.ModelStore.
+func (f fakeModelStore) UpdateGpuUsage(serverKey string, replicaIdx int, gpuUsages float64) error {
+	panic("unimplemented")
+}
+
 var _ store.ModelStore = (*fakeModelStore)(nil)
 
 func (f fakeModelStore) UpdateModel(config *scheduler.LoadModelRequest) error {
@@ -104,6 +109,7 @@ func (f fakeModelStore) DrainServerReplica(serverName string, replicaIdx int) ([
 func (f fakeModelStore) UpdateServerScaleToReplicas(serverName string, replicas int32) {
 	panic("implement me")
 }
+
 
 func TestUpdatePipelineModelAvailable(t *testing.T) {
 	g := NewGomegaWithT(t)

@@ -185,6 +185,7 @@ type ServerReplica struct {
 	// precomputed values to speed up ops on scheduler
 	uniqueLoadedModels map[string]bool
 	isDraining         bool
+	gpuUsage           float64
 	createdTime         time.Time
 }
 
@@ -628,6 +629,7 @@ func (s *ServerReplica) createSnapshot(modelDetails bool) *ServerReplica {
 		uniqueLoadedModels:   uniqueLoadedModels,
 		isDraining:           s.GetIsDraining(),
 		createdTime:           s.createdTime,
+		gpuUsage:             s.gpuUsage,
 	}
 }
 
@@ -726,6 +728,9 @@ func (s *ServerReplica) UpdateReservedMemory(memBytes uint64, isAdd bool) {
 			s.reservedMemory -= memBytes
 		}
 	}
+}
+func (s *ServerReplica) GetGpuUsage() float64 {
+	return s.gpuUsage
 }
 
 func (s *ServerReplica) addModelVersion(modelName string, modelVersion uint32, replicaState ModelReplicaState) {

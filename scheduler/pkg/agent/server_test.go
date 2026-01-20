@@ -118,6 +118,11 @@ func (m *mockStore) GetAllModels() []string {
 	return modelNames
 }
 
+// UpdateGpuUsage implements store.ModelStore.
+func (m *mockStore) UpdateGpuUsage(serverKey string, replicaIdx int, gpuUsages float64) error {
+	panic("unimplemented")
+}
+
 type mockGrpcStream struct {
 	err error
 	grpc.ServerStream

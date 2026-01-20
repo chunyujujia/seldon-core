@@ -40,11 +40,11 @@ type ScalerConfig struct {
 	stabilizationWindow   time.Duration
 }
 
-func DefaultScalerConfig(stabilizationWindowSeconds uint64) ScalerConfig {
+func DefaultScalerConfig(stabilizationWindowSeconds uint64, gpuUsageCordonPercentage float64) ScalerConfig {
 	return ScalerConfig{
 		scaleUpReplicaFilters: []filters.ReplicaFilter{filters.ExplainerFilter{}},
-		replicaFilters:        []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: false}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}},
-		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableMemorySorter{}, sorters.ModelAlreadyLoadedSorter{}},
+		replicaFilters:        []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: false}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsageCordonPercentage)},
+		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableMemorySorter{}, sorters.ModelAlreadyLoadedSorter{}, sorters.GpuUsageSorter{}},
 		stabilizationWindow:   time.Duration(stabilizationWindowSeconds) * time.Second,
 	}
 }

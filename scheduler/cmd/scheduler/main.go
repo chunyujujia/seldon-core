@@ -20,8 +20,10 @@ import (
 
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	envoyServerControlPlaneV3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	"github.com/prometheus/client_golang/api"
 	log "github.com/sirupsen/logrus"
 
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/agent"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/coordinator"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/envoy/processor"
@@ -31,6 +33,7 @@ import (
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/kafka/dataflow"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/cleaner"
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/metrics"
 	schedulerServer "github.com/seldonio/seldon-core/scheduler/v2/pkg/server"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store/experiment"
@@ -57,6 +60,7 @@ var (
 	allowPlaintxt              bool //scheduler server
 	autoscalingDisabled        bool
 	stabilizationWindowSeconds uint64
+	gpuUsageCordonPercentage   float64
 	scalingPeriodSeconds       uint64
 	kafkaConfigPath            string
 )
@@ -108,6 +112,7 @@ func init() {
 	)
 	flag.Uint64Var(&stabilizationWindowSeconds, "stabilization-window-seconds", 1800, "Stabilizaition widionw before scaling down server replica, default 1800")
 	flag.Uint64Var(&scalingPeriodSeconds, "scaling-period-seconds", 60, "Scaling period in seconds, default 60")
+	flag.Float64Var(&gpuUsageCordonPercentage, "gpu-usage-cordon-percentage", 50, "Don't schedule models to replicas with gpu usage over this threshold")
 }
 
 func getNamespace() string {
@@ -190,13 +195,51 @@ func main() {
 	if autoscalingDisabled {
 		scaler = &scheduler.DisabledServerScaler{}
 	} else {
-		scaler = scheduler.NewMemoryServerScaler(ss, scheduler.DefaultScalerConfig(stabilizationWindowSeconds), logger)
+		scaler = scheduler.NewMemoryServerScaler(ss, scheduler.DefaultScalerConfig(stabilizationWindowSeconds, gpuUsageCordonPercentage), logger)
 	}
+
+	// Configure Prometheus client using flexible configuration with TLS support
+	promConfig := metrics.GetPrometheusConfigFromEnv()
+
+	// ensure we have a valid configuration
+	if promConfig == nil {
+		log.WithError(err).Fatal("failed to get Prometheus configuration")
+	}
+
+	// Create Prometheus client with TLS support
+	promClientConfig, err := metrics.CreatePrometheusClientConfig(promConfig)
+	if err != nil {
+		log.WithError(err).Fatal("failed to create prometheus client config")
+	}
+
+	promClient, err := api.NewClient(*promClientConfig)
+	if err != nil {
+		log.WithError(err).Fatal("failed to create prometheus client")
+	}
+
+	promAPI := promv1.NewAPI(promClient)
+
+	// Validate that the API is working by testing a simple query with retry logic
+	if err := metrics.ValidatePrometheusAPI(context.Background(), promAPI); err != nil {
+		log.WithError(err).Fatal("CRITICAL: Failed to connect to Prometheus - WVA requires Prometheus connectivity for autoscaling decisions")
+	}
+	log.Info("Prometheus client and API wrapper initialized and validated successfully")
+
+	prometheusSource := metrics.NewPrometheusSource(promAPI, metrics.DefaultPrometheusSourceConfig(), logger)
+	k8sClient, err := util.CreateClientset()
+	if err != nil {
+		log.WithError(err).Fatal("CRITICAL: Failed to create k8s client")
+	}
+	metricCollector := metrics.NewReplicaMetricsCollector(
+		ctx, prometheusSource, k8sClient, logger,
+	)
 
 	sched := scheduler.NewSimpleScheduler(
 		logger,
+		namespace,
 		ss,
-		scheduler.DefaultSchedulerConfig(ss),
+		metricCollector,
+		scheduler.DefaultSchedulerConfig(ss, gpuUsageCordonPercentage),
 		scaler,
 	)
 
@@ -236,7 +279,7 @@ func main() {
 	}
 
 	serverScalingService := scheduler.NewServerScalingService(
-		ss, scaler, scalingPeriodSeconds, logger)
+		ss, metricCollector, scaler, scalingPeriodSeconds, logger)
 	err = serverScalingService.Start()
 	if err != nil {
 		log.WithError(err).Fatalf("start server scaling service error")

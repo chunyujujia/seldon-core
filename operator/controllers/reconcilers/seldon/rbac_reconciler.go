@@ -201,6 +201,11 @@ func getRoles(meta metav1.ObjectMeta) []*auth.Role {
 					Resources: []string{"secrets"},
 					Verbs:     []string{"get", "list", "watch"},
 				},
+				{
+					APIGroups: []string{""},
+					Resources: []string{"pods"},
+					Verbs:     []string{"get", "list", "watch"},
+				},
 			},
 		},
 	}

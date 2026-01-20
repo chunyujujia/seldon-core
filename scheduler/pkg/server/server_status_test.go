@@ -21,6 +21,7 @@ import (
 
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/coordinator"
 	scheduler2 "github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler"
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/metrics"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store/experiment"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store/pipeline"
@@ -331,7 +332,9 @@ func createTestScheduler() (*SchedulerServer, *coordinator.EventHub) {
 	scheduler := scheduler2.NewSimpleScheduler(
 		logger,
 		schedulerStore,
-		scheduler2.DefaultSchedulerConfig(schedulerStore),
+		metrics.NewMockCollector(),
+		scheduler2.DefaultSchedulerConfig(schedulerStore, 100),
+		&scheduler2.DisabledServerScaler{},
 	)
 	s := NewSchedulerServer(logger, schedulerStore, experimentServer, pipelineServer, scheduler, eventHub)
 

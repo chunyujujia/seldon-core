@@ -403,6 +403,10 @@ func (f fakeModelStore) FailedScheduling(modelVersion *store.ModelVersion, reaso
 func (f fakeModelStore) GetAllModels() []string {
 	panic("implement me")
 }
+// UpdateGpuUsage implements store.ModelStore.
+func (f fakeModelStore) UpdateGpuUsage(serverKey string, replicaIdx int, gpuUsages float64) error {
+	panic("unimplemented")
+}
 
 func TestHandleModelEvents(t *testing.T) {
 	g := NewGomegaWithT(t)

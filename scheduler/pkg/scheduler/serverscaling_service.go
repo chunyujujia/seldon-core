@@ -17,27 +17,31 @@ limitations under the License.
 package scheduler
 
 import (
+	"context"
 	"time"
 
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/metrics"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 	log "github.com/sirupsen/logrus"
 )
 
 type serverScalingService struct {
-	store         store.ModelStore
-	scaler        ServerScaler
-	periodSeconds uint64
-	done          chan bool
-	logger        log.FieldLogger
+	store           store.ModelStore
+	metricCollector metrics.Collector
+	scaler          ServerScaler
+	periodSeconds   uint64
+	done            chan bool
+	logger          log.FieldLogger
 }
 
-func NewServerScalingService(store store.ModelStore, scaler ServerScaler, periodSeconds uint64, logger log.FieldLogger) *serverScalingService {
+func NewServerScalingService(store store.ModelStore, metricCollector metrics.Collector, scaler ServerScaler, periodSeconds uint64, logger log.FieldLogger) *serverScalingService {
 	return &serverScalingService{
-		store:         store,
-		scaler:        scaler,
-		periodSeconds: periodSeconds,
-		done:          make(chan bool),
-		logger:        logger,
+		store:           store,
+		metricCollector: metricCollector,
+		scaler:          scaler,
+		periodSeconds:   periodSeconds,
+		done:            make(chan bool),
+		logger:          logger,
 	}
 }
 
@@ -83,6 +87,24 @@ func (ss *serverScalingService) scaleDownServerIfNeed() error {
 	}
 
 	for _, server := range servers {
+		serverNamespace := server.KubernetesMeta.GetNamespace()
+		if serverNamespace == "" {
+			ss.logger.Warnf("there isn't k8s meta for server %s", server.Name)
+			continue
+		}
+		metrics, err := ss.metricCollector.CollectReplicaMetrics(
+			context.Background(),
+			serverNamespace,
+			server.Name,
+		)
+		if err != nil {
+			ss.logger.WithField("server", server.Name).WithError(err).Errorf("fail to collect replica metrics")
+			continue
+		}
+		for _, metric := range metrics {
+			ss.store.UpdateGpuUsage(server.Name, metric.ReplicaIdx, metric.GpuUsagePercentage)
+		}
+
 		scaleToReplicas := server.ExpectedReplicas - 1
 
 		if ss.scaler.Scalable(server.Name, scaleToReplicas, nil) {

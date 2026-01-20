@@ -787,3 +787,19 @@ func toSchedulerLoadedModels(agentLoadedModels []*agent.ModelVersion) map[ModelV
 	}
 	return loadedModels
 }
+
+func (m *MemoryStore) UpdateGpuUsage(serverKey string, replicaIdx int, gpuUsage float64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	server := m.store.servers[serverKey]
+	if server == nil {
+		return fmt.Errorf("Server [%s] not found", serverKey)
+	}
+	replica := server.replicas[replicaIdx]
+	if replica == nil {
+		return fmt.Errorf("server replica %d not found", replicaIdx)
+	}
+	replica.gpuUsage = gpuUsage
+	return nil
+}

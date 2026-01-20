@@ -10,6 +10,7 @@ the Change License after the Change Date as each is defined in accordance with t
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"sort"
 	"strconv"
@@ -19,13 +20,18 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/filters"
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/metrics"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/sorters"
 	store "github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 )
 
+const DefaultGpuUsageThreshold = 50
+
 type SimpleScheduler struct {
 	muSortAndUpdate sync.Mutex
+	namespace       string
 	store           store.ModelStore
+	metricCollector metrics.Collector
 	logger          log.FieldLogger
 	scaler          ServerScaler
 	SchedulerConfig
@@ -38,21 +44,25 @@ type SchedulerConfig struct {
 	replicaSorts   []sorters.ReplicaSorter
 }
 
-func DefaultSchedulerConfig(store store.ModelStore) SchedulerConfig {
+func DefaultSchedulerConfig(store store.ModelStore, gpuUsasgeCordonPercentage float64) SchedulerConfig {
 	return SchedulerConfig{
 		serverFilters:  []filters.ServerFilter{filters.ServerReplicaFilter{}, filters.SharingServerFilter{}, filters.DeletedServerFilter{}, filters.ServerRequirementFilter{}},
-		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}},
+		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsasgeCordonPercentage)},
 		serverSorts:    []sorters.ServerSorter{},
-		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableMemorySorter{}, sorters.ModelAlreadyLoadedSorter{}},
+		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableMemorySorter{}, sorters.ModelAlreadyLoadedSorter{}, sorters.GpuUsageSorter{}},
 	}
 }
 
 func NewSimpleScheduler(logger log.FieldLogger,
+	namespace string,
 	store store.ModelStore,
+	metricCollector metrics.Collector,
 	schedulerConfig SchedulerConfig,
 	scaler ServerScaler) *SimpleScheduler {
 	s := &SimpleScheduler{
+		namespace:       namespace,
 		store:           store,
+		metricCollector: metricCollector,
 		logger:          logger.WithField("Name", "SimpleScheduler"),
 		scaler:          scaler,
 		SchedulerConfig: schedulerConfig,
@@ -164,6 +174,28 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 		ok := false
 		for _, candidateServer := range filteredServers {
 			logger.WithField("server", candidateServer.Name).Debug("Checking compatibility with candidate server")
+			serverNamespace := candidateServer.KubernetesMeta.GetNamespace()
+			if serverNamespace == "" {
+				// trick: the namespace candidate server is empty before the controller notifies scheduler.
+				logger.Warnf("there isn't k8s meta for server %s", candidateServer.Name)
+				serverNamespace = s.namespace
+			}
+			metrics, err := s.metricCollector.CollectReplicaMetrics(
+				context.Background(),
+				serverNamespace,
+				candidateServer.Name,
+			)
+			if err != nil {
+				logger.WithField("server", candidateServer.Name).WithError(err).Errorf("fail to collect replica metrics")
+				for replicaIdx := range candidateServer.Replicas {
+					s.store.UpdateGpuUsage(candidateServer.Name, replicaIdx, 100.0)
+				}
+			} else {
+				for _, metric := range metrics {
+					s.store.UpdateGpuUsage(candidateServer.Name, metric.ReplicaIdx, metric.GpuUsagePercentage)
+				}
+			}
+
 			var candidateReplicas *sorters.CandidateServer
 
 			// we need a lock here, we could have many goroutines at sorting

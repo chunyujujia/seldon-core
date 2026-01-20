@@ -18,7 +18,7 @@ import (
 
 	"github.com/seldonio/seldon-core/apis/go/v2/mlops/agent"
 	pb "github.com/seldonio/seldon-core/apis/go/v2/mlops/scheduler"
-
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/scheduler/metrics"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 )
 
@@ -126,12 +126,16 @@ func (f mockStore) AddServerEventListener(c chan string) {
 
 }
 
+func (f mockStore) UpdateGpuUsage(serverKey string, replicaIdx int, gpuUsages float64) error {
+	return nil
+}
+
 func TestScheduler(t *testing.T) {
 	logger := log.New()
 	g := NewGomegaWithT(t)
 
 	newTestModel := func(name string, requiredMemory uint64, requirements []string, server *string, replicas uint32, loadedModels []int, deleted bool, scheduledServer string, drainedModels []int) *store.ModelSnapshot {
-		config := &pb.Model{ModelSpec: &pb.ModelSpec{MemoryBytes: &requiredMemory, Requirements: requirements, Server: server}, DeploymentSpec: &pb.DeploymentSpec{Replicas: replicas}}
+		config := &pb.Model{Meta: &pb.MetaData{}, ModelSpec: &pb.ModelSpec{MemoryBytes: &requiredMemory, Requirements: requirements, Server: server}, DeploymentSpec: &pb.DeploymentSpec{Replicas: replicas}}
 		rmap := make(map[int]store.ReplicaStatus)
 		for _, ridx := range loadedModels {
 			rmap[ridx] = store.ReplicaStatus{State: store.Loaded}
@@ -162,7 +166,7 @@ func TestScheduler(t *testing.T) {
 		scheduledServer   string
 		scheduledReplicas []int
 	}
-
+	
 	tests := []test{
 		{
 			name:  "SmokeTest",
@@ -502,7 +506,7 @@ func TestScheduler(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mockStore := newMockStore(test.model, test.servers)
-			scheduler := NewSimpleScheduler(logger, mockStore, DefaultSchedulerConfig(mockStore), &DisabledServerScaler{})
+			scheduler := NewSimpleScheduler(logger, mockStore, metrics.NewMockCollector(), DefaultSchedulerConfig(mockStore, 100), &DisabledServerScaler{})
 			err := scheduler.Schedule(test.model.Name)
 			if test.scheduled {
 				g.Expect(err).To(BeNil())
@@ -565,7 +569,7 @@ func TestFailedModels(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mockStore := newMockStore(test.models)
-			scheduler := NewSimpleScheduler(logger, mockStore, DefaultSchedulerConfig(mockStore), &DisabledServerScaler{})
+			scheduler := NewSimpleScheduler(logger, mockStore, metrics.NewMockCollector(), DefaultSchedulerConfig(mockStore, 100), &DisabledServerScaler{})
 			failedMoels, err := scheduler.getFailedModels()
 			g.Expect(err).To(BeNil())
 			sort.Strings(failedMoels)
