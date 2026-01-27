@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/util"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,8 @@ const (
 // ReplicaMetricsCollector collects replica-level metrics for saturation analysis
 // using the v2 collector infrastructure.
 type ReplicaMetricsCollector struct {
+	namespace          string
+	store              store.ModelStore
 	source             *PrometheusSource
 	k8sClient          kubernetes.Interface
 	stalenessThreshold time.Duration
@@ -37,8 +40,10 @@ type ReplicaMetricsCollector struct {
 }
 
 // NewReplicaMetricsCollector creates a new replica metrics collector with a custom staleness threshold.
-func NewReplicaMetricsCollector(ctx context.Context, source *PrometheusSource, k8sClient kubernetes.Interface, logger log.FieldLogger) *ReplicaMetricsCollector {
+func NewReplicaMetricsCollector(ctx context.Context, namespace string, store store.ModelStore, source *PrometheusSource, k8sClient kubernetes.Interface, logger log.FieldLogger) *ReplicaMetricsCollector {
 	return &ReplicaMetricsCollector{
+		namespace:          namespace,
+		store:              store,
 		source:             source,
 		k8sClient:          k8sClient,
 		stalenessThreshold: DefaultMetricStalenessThreshold,
@@ -46,8 +51,33 @@ func NewReplicaMetricsCollector(ctx context.Context, source *PrometheusSource, k
 		logger:             logger,
 	}
 }
+func (c *ReplicaMetricsCollector) RefreshReplicaMetrics(ctx context.Context, namespace, server string) error {
+	if namespace == "" {
+		namespace = c.namespace
+	}
+	metrics, err := c.collectReplicaMetrics(
+		context.Background(),
+		namespace,
+		server,
+	)
+	if err != nil {
+		c.logger.WithField("namespace", namespace).WithField("server", server).WithError(err).Errorf("fail to collect replica metrics")
+		serverSnapshot, err := c.store.GetServer(server, false, false)
+		if err != nil {
+			return err
+		}
+		for replicaIdx := range serverSnapshot.Replicas {
+			c.store.UpdateGpuUsage(server, replicaIdx, 100.0)
+		}
+	} else {
+		for _, metric := range metrics {
+			c.store.UpdateGpuUsage(server, metric.ReplicaIdx, metric.GpuUsagePercentage)
+		}
+	}
+	return nil
+}
 
-func (c *ReplicaMetricsCollector) CollectReplicaMetrics(
+func (c *ReplicaMetricsCollector) collectReplicaMetrics(
 	ctx context.Context,
 	namespace string,
 	server string,
@@ -88,7 +118,7 @@ func (c *ReplicaMetricsCollector) CollectReplicaMetrics(
 	}
 	c.cache.set(cacheKey, replicaMetrics, 0)
 	c.logger.WithField("namespace", namespace).WithField("server", server).
-		WithField("replicaCount", len(replicaMetrics)).
+		WithField("metrics", replicaMetrics).
 		Info("collected replica metrics")
 
 	return replicaMetrics, nil

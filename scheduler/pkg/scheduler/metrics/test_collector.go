@@ -4,14 +4,11 @@ import "context"
 
 type mockCollector struct{}
 
-func NewMockCollector() Collector {
-	return &mockCollector{}
+// RefreshReplicaMetrics implements Collector.
+func (c *mockCollector) RefreshReplicaMetrics(ctx context.Context, namespace string, server string) error {
+	panic("unimplemented")
 }
 
-func (c *mockCollector) CollectReplicaMetrics(
-	ctx context.Context,
-	namespace string,
-	server string,
-) ([]ReplicaMetrics, error) {
-	return []ReplicaMetrics{}, nil
+func NewMockCollector() Collector {
+	return &mockCollector{}
 }

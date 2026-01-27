@@ -231,12 +231,11 @@ func main() {
 		log.WithError(err).Fatal("CRITICAL: Failed to create k8s client")
 	}
 	metricCollector := metrics.NewReplicaMetricsCollector(
-		ctx, prometheusSource, k8sClient, logger,
+		ctx, namespace, ss, prometheusSource, k8sClient, logger,
 	)
 
 	sched := scheduler.NewSimpleScheduler(
 		logger,
-		namespace,
 		ss,
 		metricCollector,
 		scheduler.DefaultSchedulerConfig(ss, gpuUsageCordonPercentage),
@@ -308,6 +307,7 @@ func main() {
 	s.StopSendPipelineEvents()
 	cs.StopSendPipelineEvents()
 	as.StopAgentStreams()
+	time.Sleep(time.Second * 1)
 
 	log.Info("Shutdown services")
 }

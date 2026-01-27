@@ -103,5 +103,5 @@ type ReplicaMetrics struct {
 }
 
 type Collector interface {
-	CollectReplicaMetrics(ctx context.Context, namespace, server string) ([]ReplicaMetrics, error)
+	RefreshReplicaMetrics(ctx context.Context, namespace, server string) error
 }

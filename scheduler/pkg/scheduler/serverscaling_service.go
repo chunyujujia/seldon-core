@@ -87,22 +87,13 @@ func (ss *serverScalingService) scaleDownServerIfNeed() error {
 	}
 
 	for _, server := range servers {
-		serverNamespace := server.KubernetesMeta.GetNamespace()
-		if serverNamespace == "" {
-			ss.logger.Warnf("there isn't k8s meta for server %s", server.Name)
-			continue
-		}
-		metrics, err := ss.metricCollector.CollectReplicaMetrics(
+		err := ss.metricCollector.RefreshReplicaMetrics(
 			context.Background(),
-			serverNamespace,
-			server.Name,
-		)
+			server.KubernetesMeta.GetNamespace(),
+			server.Name)
 		if err != nil {
-			ss.logger.WithField("server", server.Name).WithError(err).Errorf("fail to collect replica metrics")
+			ss.logger.WithField("server", server.Name).WithError(err).Errorf("fail to refresh replica metrics")
 			continue
-		}
-		for _, metric := range metrics {
-			ss.store.UpdateGpuUsage(server.Name, metric.ReplicaIdx, metric.GpuUsagePercentage)
 		}
 
 		scaleToReplicas := server.ExpectedReplicas - 1
