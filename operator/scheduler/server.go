@@ -78,21 +78,26 @@ func (s *SchedulerClient) ServerNotify(ctx context.Context, server *v1alpha1.Ser
 // note: namespace is not used in this function
 func (s *SchedulerClient) SubscribeServerEvents(ctx context.Context, conn *grpc.ClientConn, namespace string) error {
 	logger := s.logger.WithName("SubscribeServerEvents")
+
 	grcpClient := scheduler.NewSchedulerClient(conn)
 
 	stream, err := grcpClient.SubscribeServerStatus(
 		ctx,
 		&scheduler.ServerSubscriptionRequest{SubscriberName: "seldon manager"},
-		grpc_retry.WithMax(SchedulerConnectMaxRetries),
-		grpc_retry.WithBackoff(grpc_retry.BackoffExponential(SchedulerConnectBackoffScalar)),
+		grpc_retry.WithMax(1),
 	)
 	if err != nil {
 		return err
 	}
+
+	// notify the scheduler as the scheduler might have lost the state
+	go s.handleServers(ctx, namespace)
+
 	for {
 		event, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
+				logger.Info("the stream received EOF")
 				break
 			}
 			logger.Error(err, "event recv failed")
@@ -185,5 +190,32 @@ func (sc *SchedulerClient) scaleServerReplicas(server *v1alpha1.Server, replicas
 		Namespace:  server.Namespace,
 		ServerName: server.Name,
 		Replicas:   replicas,
+	}
+}
+
+func (s *SchedulerClient) handleServers(ctx context.Context, namespace string) {
+	serverList := &v1alpha1.ServerList{}
+
+	err := s.List(
+		ctx,
+		serverList,
+		client.InNamespace(namespace),
+	)
+	if err != nil {
+		s.logger.Error(err, "failed to list servers in k8s")
+		return
+	}
+
+	for _, server := range serverList.Items {
+		if server.ObjectMeta.DeletionTimestamp.IsZero() {
+			s.logger.Info("Notify the server info to the scheduler (on reconnect)", "server", server.Name)
+			if err := s.ServerNotify(ctx, &server); err != nil {
+				s.logger.Error(err, "failed to notify scheduler about the server", "server", server.Name)
+			} else {
+				s.logger.Info("server notified successfully", "server", server.Name)
+			}
+		} else {
+			s.logger.Info("Server is being deleted, not loading", "server", server.Name)
+		}
 	}
 }

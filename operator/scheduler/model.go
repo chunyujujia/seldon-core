@@ -135,6 +135,7 @@ func (s *SchedulerClient) SubscribeModelEvents(ctx context.Context, conn *grpc.C
 		event, err := stream.Recv()
 		if err != nil {
 			if err == io.EOF {
+				logger.Info("the stream received EOF")
 				break
 			}
 			logger.Error(err, "event recv failed")
