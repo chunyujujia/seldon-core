@@ -30,25 +30,27 @@ const (
 // ReplicaMetricsCollector collects replica-level metrics for saturation analysis
 // using the v2 collector infrastructure.
 type ReplicaMetricsCollector struct {
-	namespace          string
-	store              store.ModelStore
-	source             *PrometheusSource
-	k8sClient          kubernetes.Interface
-	stalenessThreshold time.Duration
-	cache              *Cache[[]ReplicaMetrics]
-	logger             log.FieldLogger
+	namespace                string
+	store                    store.ModelStore
+	source                   *PrometheusSource
+	k8sClient                kubernetes.Interface
+	useDeploymentsForServers bool
+	stalenessThreshold       time.Duration
+	cache                    *Cache[[]ReplicaMetrics]
+	logger                   log.FieldLogger
 }
 
 // NewReplicaMetricsCollector creates a new replica metrics collector with a custom staleness threshold.
-func NewReplicaMetricsCollector(ctx context.Context, namespace string, store store.ModelStore, source *PrometheusSource, k8sClient kubernetes.Interface, logger log.FieldLogger) *ReplicaMetricsCollector {
+func NewReplicaMetricsCollector(ctx context.Context, namespace string, store store.ModelStore, source *PrometheusSource, k8sClient kubernetes.Interface, useDeploymentsForServers bool, logger log.FieldLogger) *ReplicaMetricsCollector {
 	return &ReplicaMetricsCollector{
-		namespace:          namespace,
-		store:              store,
-		source:             source,
-		k8sClient:          k8sClient,
-		stalenessThreshold: DefaultMetricStalenessThreshold,
-		cache:              newCache[[]ReplicaMetrics](ctx, DefaultTTL, DefaultCleanupInterval),
-		logger:             logger,
+		namespace:                namespace,
+		store:                    store,
+		source:                   source,
+		k8sClient:                k8sClient,
+		useDeploymentsForServers: useDeploymentsForServers,
+		stalenessThreshold:       DefaultMetricStalenessThreshold,
+		cache:                    newCache[[]ReplicaMetrics](ctx, DefaultTTL, DefaultCleanupInterval),
+		logger:                   logger,
 	}
 }
 func (c *ReplicaMetricsCollector) RefreshReplicaMetrics(ctx context.Context, namespace, server string) error {
@@ -183,7 +185,7 @@ func (c *ReplicaMetricsCollector) queryReplicaHosts(ctx context.Context, namespa
 
 	podNodeMap := make(map[uint]string)
 	for _, pod := range pods.Items {
-		replicaIdx, err := util.ParseReplicaIdxFromPodName(pod.Name)
+		replicaIdx, err := util.ParseReplicaIdxFromPodName(pod.Name, c.useDeploymentsForServers)
 		if err != nil {
 			return nil, err
 		}

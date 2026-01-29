@@ -63,6 +63,7 @@ var (
 	gpuUsageCordonPercentage   float64
 	scalingPeriodSeconds       uint64
 	kafkaConfigPath            string
+	useDeploymentsForServers   bool
 )
 
 func init() {
@@ -113,6 +114,8 @@ func init() {
 	flag.Uint64Var(&stabilizationWindowSeconds, "stabilization-window-seconds", 1800, "Stabilizaition widionw before scaling down server replica, default 1800")
 	flag.Uint64Var(&scalingPeriodSeconds, "scaling-period-seconds", 60, "Scaling period in seconds, default 60")
 	flag.Float64Var(&gpuUsageCordonPercentage, "gpu-usage-cordon-percentage", 50, "Don't schedule models to replicas with gpu usage over this threshold")
+	flag.BoolVar(&useDeploymentsForServers, "use-deployment-for-servers", false, "Use deployment or statefulset for servers")
+
 }
 
 func getNamespace() string {
@@ -231,7 +234,7 @@ func main() {
 		log.WithError(err).Fatal("CRITICAL: Failed to create k8s client")
 	}
 	metricCollector := metrics.NewReplicaMetricsCollector(
-		ctx, namespace, ss, prometheusSource, k8sClient, logger,
+		ctx, namespace, ss, prometheusSource, k8sClient, useDeploymentsForServers, logger,
 	)
 
 	sched := scheduler.NewSimpleScheduler(

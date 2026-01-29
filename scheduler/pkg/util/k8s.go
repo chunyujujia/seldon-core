@@ -23,13 +23,10 @@ func CreateClientset() (kubernetes.Interface, error) {
 	return clientset, nil
 }
 
-func ParseReplicaIdxFromPodName(podName string) (uint, error) {
+func ParseReplicaIdxFromPodName(podName string, useDeploymentsForServers bool) (uint, error) {
 	if podName == "" {
 		return 0, errors.New("invalid empty pod name")
 	}
-	tokens := strings.Split(podName, "-")
-
-	useDeploymentsForServers := len(tokens) == 3
 
 	if useDeploymentsForServers {
 		return parseReplicaIdxFromDeploymentPodName(podName)
