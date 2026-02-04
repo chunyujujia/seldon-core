@@ -2,9 +2,9 @@ package sorters
 
 import "math"
 
-type AvailableResourceSorter struct {}
+type AvailableResourceSorter struct{}
 
-func (s AvailableResourceSorter) Name() string{
+func (s AvailableResourceSorter) Name() string {
 	return "AvailableResourceSorter"
 }
 
@@ -28,12 +28,11 @@ func (s AvailableResourceSorter) IsLess(i *CandidateReplica, j *CandidateReplica
 	}
 
 	// Calculate available GPU ratio (0-1 range)
-	iAvailGpuRatio := (100.0 - i.Replica.GetGpuUsage()) / 100.0
-	jAvailGpuRatio := (100.0 - j.Replica.GetGpuUsage()) / 100.0
+	iAvailGpuRatio := (100.0 - i.Replica.GetGpuUsage() - i.Replica.GetReservedGpuUsage()) / 100.0
+	jAvailGpuRatio := (100.0 - j.Replica.GetGpuUsage() - j.Replica.GetReservedGpuUsage()) / 100.0
 
 	// Composite score using weighted average
-	// Equal weights (0.5 each) can be adjusted based on priority
-	const memoryWeight = 0.5
+	const memoryWeight = 0.3
 	const gpuWeight = 1 - memoryWeight
 
 	iScore := iAvailMemRatio*memoryWeight + iAvailGpuRatio*gpuWeight

@@ -133,7 +133,7 @@ type hostMetricData struct {
 }
 
 func (c *ReplicaMetricsCollector) queryGpuUsages(ctx context.Context) (map[string]*hostMetricData, error) {
-	query := fmt.Sprintf("avg_over_time(%s[15m])", QueryGpuUtil)
+	query := fmt.Sprintf("avg_over_time(%s[5m])", QueryGpuUtil)
 
 	result := c.source.Query(ctx, query)
 

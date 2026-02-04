@@ -20,7 +20,7 @@ func (f GpuUsageFilter) Name() string {
 }
 
 func (f GpuUsageFilter) Filter(model *store.ModelVersion, replica *store.ServerReplica) bool {
-	return replica.GetGpuUsage() < f.gpuUsageThreshold
+	return replica.GetGpuUsage()+replica.GetReservedGpuUsage() < f.gpuUsageThreshold
 }
 
 func (f GpuUsageFilter) Description(model *store.ModelVersion, replica *store.ServerReplica) string {

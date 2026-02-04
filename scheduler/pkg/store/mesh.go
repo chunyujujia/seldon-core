@@ -22,6 +22,8 @@ import (
 	pb "github.com/seldonio/seldon-core/apis/go/v2/mlops/scheduler"
 )
 
+const DEFAULT_RESERVED_GPU_USAGE = 15
+
 type LocalSchedulerStore struct {
 	servers                map[string]*Server
 	models                 map[string]*Model
@@ -163,18 +165,18 @@ func NewServer(name string, shared bool) *Server {
 }
 
 type ServerReplica struct {
-	muReservedMemory  sync.RWMutex
-	muLoadedModels    sync.RWMutex
-	muDrainingState   sync.RWMutex
-	inferenceSvc      string
-	inferenceHttpPort int32
-	inferenceGrpcPort int32
-	serverName        string
-	replicaIdx        int
-	server            *Server
-	capabilities      []string
-	memory            uint64
-	availableMemory   uint64
+	muReservedResource sync.RWMutex
+	muLoadedModels     sync.RWMutex
+	muDrainingState    sync.RWMutex
+	inferenceSvc       string
+	inferenceHttpPort  int32
+	inferenceGrpcPort  int32
+	serverName         string
+	replicaIdx         int
+	server             *Server
+	capabilities       []string
+	memory             uint64
+	availableMemory    uint64
 	// precomputed values to speed up ops on scheduler
 	loadedModels map[ModelVersionID]bool
 	// for marking models that are in process of load requested or loading on this server (to speed up ops)
@@ -185,8 +187,12 @@ type ServerReplica struct {
 	// precomputed values to speed up ops on scheduler
 	uniqueLoadedModels map[string]bool
 	isDraining         bool
-	gpuUsage           float64
-	createdTime         time.Time
+
+	gpuUsage float64
+	// holding reserved gpu usage on server replica while loading models
+	reservedGpuUsage float64
+
+	createdTime time.Time
 }
 
 func NewServerReplica(inferenceSvc string,
@@ -217,7 +223,7 @@ func NewServerReplica(inferenceSvc string,
 		overCommitPercentage: overCommitPercentage,
 		uniqueLoadedModels:   toUniqueModels(loadedModels),
 		isDraining:           false,
-		createdTime:           time.Now(),
+		createdTime:          time.Now(),
 	}
 }
 
@@ -237,7 +243,7 @@ func NewServerReplicaFromConfig(server *Server, replicaIdx int, loadedModels map
 		overCommitPercentage: config.GetOverCommitPercentage(),
 		uniqueLoadedModels:   toUniqueModels(loadedModels),
 		isDraining:           false,
-		createdTime:           time.Now(),
+		createdTime:          time.Now(),
 	}
 }
 
@@ -628,8 +634,9 @@ func (s *ServerReplica) createSnapshot(modelDetails bool) *ServerReplica {
 		reservedMemory:       s.reservedMemory,
 		uniqueLoadedModels:   uniqueLoadedModels,
 		isDraining:           s.GetIsDraining(),
-		createdTime:           s.createdTime,
+		createdTime:          s.createdTime,
 		gpuUsage:             s.gpuUsage,
+		reservedGpuUsage:     s.reservedGpuUsage,
 	}
 }
 
@@ -691,10 +698,17 @@ func (s *ServerReplica) GetOverCommitPercentage() uint32 {
 }
 
 func (s *ServerReplica) GetReservedMemory() uint64 {
-	s.muReservedMemory.RLock()
-	defer s.muReservedMemory.RUnlock()
+	s.muReservedResource.RLock()
+	defer s.muReservedResource.RUnlock()
 
 	return s.reservedMemory
+}
+
+func (s *ServerReplica) GetReservedGpuUsage() float64 {
+	s.muReservedResource.RLock()
+	defer s.muReservedResource.RUnlock()
+
+	return s.reservedGpuUsage
 }
 
 func (s *ServerReplica) GetIsDraining() bool {
@@ -716,16 +730,23 @@ func (s *ServerReplica) GetCreateTime() time.Time {
 }
 
 func (s *ServerReplica) UpdateReservedMemory(memBytes uint64, isAdd bool) {
-	s.muReservedMemory.Lock()
-	defer s.muReservedMemory.Unlock()
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
 
 	if isAdd {
 		s.reservedMemory += memBytes
+		s.reservedGpuUsage += DEFAULT_RESERVED_GPU_USAGE
 	} else {
 		if memBytes > s.reservedMemory {
 			s.reservedMemory = 0
 		} else {
 			s.reservedMemory -= memBytes
+		}
+
+		if DEFAULT_RESERVED_GPU_USAGE > s.reservedGpuUsage {
+			s.reservedGpuUsage = 0
+		} else {
+			s.reservedGpuUsage -= DEFAULT_RESERVED_GPU_USAGE
 		}
 	}
 }

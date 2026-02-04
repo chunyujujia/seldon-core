@@ -7,5 +7,5 @@ func (s GpuUsageSorter) Name() string {
 }
 
 func (s GpuUsageSorter) IsLess(i *CandidateReplica, j *CandidateReplica) bool {
-	return i.Replica.GetGpuUsage() < j.Replica.GetGpuUsage()
+	return i.Replica.GetGpuUsage()+ i.Replica.GetReservedGpuUsage() < j.Replica.GetGpuUsage() + j.Replica.GetReservedGpuUsage()
 }
