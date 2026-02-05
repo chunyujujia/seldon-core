@@ -3,6 +3,8 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
@@ -22,14 +24,33 @@ const (
 	DefaultTTL             time.Duration = 30 * time.Second
 	DefaultCleanupInterval               = 1 * time.Second
 
-	// MetricAveragingWindow is the time window for averaging metrics in Prometheus queries.
-	// This should match the GPU_RELEASE_DELAY to compensate for metric lag.
-	MetricAveragingWindow = 5 * time.Minute
-
 	QueryGpuUtil = "DCGM_FI_DEV_GPU_UTIL"
 
 	ServerLabelNameKey = "seldon-server-name"
 )
+
+// MetricAveragingWindow is the time window for averaging metrics in Prometheus queries.
+// This value is synchronized with GPU_RELEASE_DELAY (both read from GPU_RELEASE_DELAY_MINUTES).
+// Default is 5 minutes to compensate for metric lag in concurrent scheduling.
+var MetricAveragingWindow = getMetricAveragingWindow()
+
+// getMetricAveragingWindow reads the metric averaging window from GPU_RELEASE_DELAY_MINUTES
+// environment variable or returns default (5 minutes).
+// This ensures the Prometheus averaging window matches the GPU release delay.
+func getMetricAveragingWindow() time.Duration {
+	defaultWindow := 5 * time.Minute
+	envVar := os.Getenv("GPU_RELEASE_DELAY_MINUTES")
+	if envVar == "" {
+		return defaultWindow
+	}
+
+	minutes, err := strconv.Atoi(envVar)
+	if err != nil || minutes < 0 {
+		return defaultWindow
+	}
+
+	return time.Duration(minutes) * time.Minute
+}
 
 // ReplicaMetricsCollector collects replica-level metrics for saturation analysis
 // using the v2 collector infrastructure.
