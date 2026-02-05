@@ -329,7 +329,7 @@ func (m *MemoryStore) updateLoadedModelsImpl(
 				modelKey, modelVersion.version, serverKey, replica.GetReplicaIdx(),
 			)
 			modelVersion.SetReplicaState(replica.GetReplicaIdx(), LoadRequested, "")
-			m.updateReservedMemory(LoadRequested, serverKey, replica.GetReplicaIdx(), modelVersion.GetRequiredMemory())
+			m.updateReservedResource(LoadRequested, serverKey, replica.GetReplicaIdx(), modelVersion.GetRequiredMemory(), modelKey, modelVersion.version)
 			updated = true
 		} else {
 			logger.Debugf(
@@ -490,7 +490,7 @@ func (m *MemoryStore) updateModelStateImpl(
 		// release reserved memory when state mismatch
 		if expectedState == Loading {
 			m.logger.Debugf("release reserved memory for model %s becausee of state mismatch", modelKey)
-			m.updateReservedMemory(LoadFailed, serverKey, replicaIdx, modelVersion.GetRequiredMemory())
+			m.updateReservedResource(LoadFailed, serverKey, replicaIdx, modelVersion.GetRequiredMemory(), modelKey, version)
 		}
 		return nil, fmt.Errorf(
 			"State mismatch for %s:%d expected state %s but was %s when trying to move to state %s",
@@ -498,7 +498,7 @@ func (m *MemoryStore) updateModelStateImpl(
 		)
 	}
 
-	m.updateReservedMemory(desiredState, serverKey, replicaIdx, modelVersion.GetRequiredMemory())
+	m.updateReservedResource(desiredState, serverKey, replicaIdx, modelVersion.GetRequiredMemory(), modelKey, version)
 
 	if existingState != desiredState {
 		latestModel := model.Latest()
@@ -544,8 +544,8 @@ func (m *MemoryStore) updateModelStateImpl(
 	return nil, nil
 }
 
-func (m *MemoryStore) updateReservedMemory(
-	modelReplicaState ModelReplicaState, serverKey string, replicaIdx int, memBytes uint64) {
+func (m *MemoryStore) updateReservedResource(
+	modelReplicaState ModelReplicaState, serverKey string, replicaIdx int, memBytes uint64, modelKey string, version uint32) {
 	// update reserved memory that is being used for sorting replicas
 	// do we need to lock replica update?
 	server, ok := m.store.servers[serverKey]
@@ -554,11 +554,38 @@ func (m *MemoryStore) updateReservedMemory(
 		if okReplica {
 			switch modelReplicaState {
 			case LoadRequested:
-				replica.UpdateReservedMemory(memBytes, true)
-			case LoadFailed, Loaded:
+				// Reserve both memory and GPU when load is requested
+				replica.ReserveMemory(memBytes)
+				replica.ReserveGpu()
+			case LoadFailed:
+				// Release both memory and GPU when load fails
 				m.logger.Debugf("replica %d release reserved memory %d ", replicaIdx, memBytes)
-				replica.UpdateReservedMemory(memBytes, false)
+				replica.ReleaseMemory(memBytes)
+				replica.ReleaseGpu()
+			case Loaded:
+				// For Loaded state: immediately release memory, but delay GPU release
+				m.logger.Debugf("replica %d release reserved memory %d immediately", replicaIdx, memBytes)
+				replica.ReleaseMemory(memBytes)
+
+				// Schedule delayed GPU release
+				modelVersionID := ModelVersionID{Name: modelKey, Version: version}
+				scheduled := replica.ScheduleDelayedGpuRelease(modelVersionID, GPU_RELEASE_DELAY)
+				if scheduled {
+					m.logger.Infof(
+						"Scheduled delayed GPU release for model %s:%d on server %s replica %d after %v",
+						modelKey, version, serverKey, replicaIdx, GPU_RELEASE_DELAY,
+					)
+				}
 			case Unloaded:
+				// Cancel any pending GPU release and immediately release GPU
+				modelVersionID := ModelVersionID{Name: modelKey, Version: version}
+				if replica.CancelDelayedGpuRelease(modelVersionID) {
+					replica.ReleaseGpu()
+					m.logger.Infof(
+						"Cancelled delayed GPU release and immediately released GPU for model %s:%d on server %s replica %d",
+						modelKey, version, serverKey, replicaIdx,
+					)
+				}
 			}
 		}
 	}

@@ -11,6 +11,8 @@ package store
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,6 +25,27 @@ import (
 )
 
 const DEFAULT_RESERVED_GPU_USAGE = 15
+
+// GPU_RELEASE_DELAY is the delay duration before releasing reserved GPU after a model is loaded
+// This compensates for the lag in Prometheus avg_over_time[5m] metric updates
+// Can be overridden by setting the GPU_RELEASE_DELAY_MINUTES environment variable
+var GPU_RELEASE_DELAY = getGpuReleaseDelay()
+
+// getGpuReleaseDelay reads the GPU release delay from environment variable or returns default (5 minutes)
+func getGpuReleaseDelay() time.Duration {
+	defaultDelay := 5 * time.Minute
+	envVar := os.Getenv("GPU_RELEASE_DELAY_MINUTES")
+	if envVar == "" {
+		return defaultDelay
+	}
+
+	minutes, err := strconv.Atoi(envVar)
+	if err != nil || minutes < 0 {
+		return defaultDelay
+	}
+
+	return time.Duration(minutes) * time.Minute
+}
 
 type LocalSchedulerStore struct {
 	servers                map[string]*Server
@@ -191,6 +214,8 @@ type ServerReplica struct {
 	gpuUsage float64
 	// holding reserved gpu usage on server replica while loading models
 	reservedGpuUsage float64
+	// map to track pending GPU release timers, key is model version ID
+	pendingGpuReleases map[ModelVersionID]*time.Timer
 
 	createdTime time.Time
 }
@@ -223,6 +248,7 @@ func NewServerReplica(inferenceSvc string,
 		overCommitPercentage: overCommitPercentage,
 		uniqueLoadedModels:   toUniqueModels(loadedModels),
 		isDraining:           false,
+		pendingGpuReleases:   map[ModelVersionID]*time.Timer{},
 		createdTime:          time.Now(),
 	}
 }
@@ -243,6 +269,7 @@ func NewServerReplicaFromConfig(server *Server, replicaIdx int, loadedModels map
 		overCommitPercentage: config.GetOverCommitPercentage(),
 		uniqueLoadedModels:   toUniqueModels(loadedModels),
 		isDraining:           false,
+		pendingGpuReleases:   map[ModelVersionID]*time.Timer{},
 		createdTime:          time.Now(),
 	}
 }
@@ -729,26 +756,90 @@ func (s *ServerReplica) GetCreateTime() time.Time {
 	return s.createdTime
 }
 
-func (s *ServerReplica) UpdateReservedMemory(memBytes uint64, isAdd bool) {
+// ReserveMemory reserves the specified amount of memory
+func (s *ServerReplica) ReserveMemory(memBytes uint64) {
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
+	s.reservedMemory += memBytes
+}
+
+// ReleaseMemory releases the specified amount of reserved memory
+func (s *ServerReplica) ReleaseMemory(memBytes uint64) {
 	s.muReservedResource.Lock()
 	defer s.muReservedResource.Unlock()
 
-	if isAdd {
-		s.reservedMemory += memBytes
-		s.reservedGpuUsage += DEFAULT_RESERVED_GPU_USAGE
+	if memBytes > s.reservedMemory {
+		s.reservedMemory = 0
 	} else {
-		if memBytes > s.reservedMemory {
-			s.reservedMemory = 0
-		} else {
-			s.reservedMemory -= memBytes
-		}
+		s.reservedMemory -= memBytes
+	}
+}
 
+// ReserveGpu reserves GPU resources
+func (s *ServerReplica) ReserveGpu() {
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
+	s.reservedGpuUsage += DEFAULT_RESERVED_GPU_USAGE
+}
+
+// ReleaseGpu releases reserved GPU resources
+func (s *ServerReplica) ReleaseGpu() {
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
+
+	if DEFAULT_RESERVED_GPU_USAGE > s.reservedGpuUsage {
+		s.reservedGpuUsage = 0
+	} else {
+		s.reservedGpuUsage -= DEFAULT_RESERVED_GPU_USAGE
+	}
+}
+
+// ScheduleDelayedGpuRelease schedules a delayed GPU release for a model after the specified duration
+// Returns true if the timer was scheduled, false if there was already a pending release for this model
+func (s *ServerReplica) ScheduleDelayedGpuRelease(modelVersionID ModelVersionID, delay time.Duration) bool {
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
+
+	// Check if there's already a pending release for this model
+	if _, exists := s.pendingGpuReleases[modelVersionID]; exists {
+		return false
+	}
+
+	// Schedule the GPU release
+	timer := time.AfterFunc(delay, func() {
+		s.muReservedResource.Lock()
+		defer s.muReservedResource.Unlock()
+
+		// Release the GPU
 		if DEFAULT_RESERVED_GPU_USAGE > s.reservedGpuUsage {
 			s.reservedGpuUsage = 0
 		} else {
 			s.reservedGpuUsage -= DEFAULT_RESERVED_GPU_USAGE
 		}
+
+		// Remove the timer from pending releases
+		delete(s.pendingGpuReleases, modelVersionID)
+	})
+
+	s.pendingGpuReleases[modelVersionID] = timer
+	return true
+}
+
+// CancelDelayedGpuRelease cancels a pending GPU release for a model
+// Returns true if a pending release was cancelled, false if there was no pending release
+func (s *ServerReplica) CancelDelayedGpuRelease(modelVersionID ModelVersionID) bool {
+	s.muReservedResource.Lock()
+	defer s.muReservedResource.Unlock()
+
+	timer, exists := s.pendingGpuReleases[modelVersionID]
+	if !exists {
+		return false
 	}
+
+	// Stop the timer and remove it from the map
+	timer.Stop()
+	delete(s.pendingGpuReleases, modelVersionID)
+	return true
 }
 func (s *ServerReplica) GetGpuUsage() float64 {
 	return s.gpuUsage

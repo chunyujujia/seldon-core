@@ -55,7 +55,8 @@ type SimulateRecord struct {
 }
 
 func (r *SimulateRecord) Add(replica *store.ServerReplica, memory uint64) {
-	replica.UpdateReservedMemory(memory, true)
+	replica.ReserveMemory(memory)
+	replica.ReserveGpu()
 	replicaIdx := replica.GetReplicaIdx()
 	r.reservedMemory[replicaIdx] += memory
 }
@@ -63,7 +64,8 @@ func (r *SimulateRecord) Add(replica *store.ServerReplica, memory uint64) {
 func (r *SimulateRecord) ReleaseReservedMemory() {
 	for replicaIdx, memory := range r.reservedMemory {
 		replica := r.server.Replicas[replicaIdx]
-		replica.UpdateReservedMemory(memory, false)
+		replica.ReleaseMemory(memory)
+		replica.ReleaseGpu()
 	}
 }
 
