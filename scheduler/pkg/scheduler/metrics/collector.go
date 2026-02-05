@@ -22,6 +22,10 @@ const (
 	DefaultTTL             time.Duration = 30 * time.Second
 	DefaultCleanupInterval               = 1 * time.Second
 
+	// MetricAveragingWindow is the time window for averaging metrics in Prometheus queries.
+	// This should match the GPU_RELEASE_DELAY to compensate for metric lag.
+	MetricAveragingWindow = 5 * time.Minute
+
 	QueryGpuUtil = "DCGM_FI_DEV_GPU_UTIL"
 
 	ServerLabelNameKey = "seldon-server-name"
@@ -133,7 +137,7 @@ type hostMetricData struct {
 }
 
 func (c *ReplicaMetricsCollector) queryGpuUsages(ctx context.Context) (map[string]*hostMetricData, error) {
-	query := fmt.Sprintf("avg_over_time(%s[5m])", QueryGpuUtil)
+	query := fmt.Sprintf("avg_over_time(%s[%s])", QueryGpuUtil, MetricAveragingWindow.String())
 
 	result := c.source.Query(ctx, query)
 

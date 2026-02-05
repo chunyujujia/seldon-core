@@ -26,12 +26,15 @@ import (
 
 const DEFAULT_RESERVED_GPU_USAGE = 15
 
-// GPU_RELEASE_DELAY is the delay duration before releasing reserved GPU after a model is loaded
-// This compensates for the lag in Prometheus avg_over_time[5m] metric updates
-// Can be overridden by setting the GPU_RELEASE_DELAY_MINUTES environment variable
+// GPU_RELEASE_DELAY is the delay duration before releasing reserved GPU after a model is loaded.
+// This compensates for the lag in Prometheus avg_over_time metric updates.
+// IMPORTANT: This value MUST match metrics.MetricAveragingWindow (5 minutes by default)
+// to ensure reserved GPU is held for the same duration as the metric averaging window.
+// Can be overridden by setting the GPU_RELEASE_DELAY_MINUTES environment variable.
 var GPU_RELEASE_DELAY = getGpuReleaseDelay()
 
-// getGpuReleaseDelay reads the GPU release delay from environment variable or returns default (5 minutes)
+// getGpuReleaseDelay reads the GPU release delay from environment variable or returns default.
+// Default is 5 minutes to match metrics.MetricAveragingWindow.
 func getGpuReleaseDelay() time.Duration {
 	defaultDelay := 5 * time.Minute
 	envVar := os.Getenv("GPU_RELEASE_DELAY_MINUTES")
