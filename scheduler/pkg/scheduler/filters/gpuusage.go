@@ -8,11 +8,13 @@ import (
 
 type GpuUsageFilter struct {
 	gpuUsageThreshold float64
+	affinity          bool
 }
 
-func NewGpuUsageFilter(gpuUsageThreshold float64) GpuUsageFilter {
+func NewGpuUsageFilter(gpuUsageThreshold float64, affinity bool) GpuUsageFilter {
 	return GpuUsageFilter{
 		gpuUsageThreshold: gpuUsageThreshold,
+		affinity:          affinity,
 	}
 }
 func (f GpuUsageFilter) Name() string {
@@ -20,7 +22,14 @@ func (f GpuUsageFilter) Name() string {
 }
 
 func (f GpuUsageFilter) Filter(model *store.ModelVersion, replica *store.ServerReplica) bool {
-	return replica.GetGpuUsage()+replica.GetReservedGpuUsage() < f.gpuUsageThreshold
+	filtered := replica.GetGpuUsage()+replica.GetReservedGpuUsage() < f.gpuUsageThreshold
+	loaded := isModelReplicaLoadedOnServerReplica(model, replica)
+	if f.affinity {
+		filtered = filtered || loaded
+	} else {
+		filtered = filtered && !loaded
+	}
+	return filtered
 }
 
 func (f GpuUsageFilter) Description(model *store.ModelVersion, replica *store.ServerReplica) string {

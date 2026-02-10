@@ -46,7 +46,7 @@ type SchedulerConfig struct {
 func DefaultSchedulerConfig(store store.ModelStore, gpuUsasgeCordonPercentage float64) SchedulerConfig {
 	return SchedulerConfig{
 		serverFilters:  []filters.ServerFilter{filters.ServerReplicaFilter{}, filters.SharingServerFilter{}, filters.DeletedServerFilter{}, filters.ServerRequirementFilter{}},
-		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsasgeCordonPercentage)},
+		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsasgeCordonPercentage, true)},
 		serverSorts:    []sorters.ServerSorter{},
 		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.ModelAlreadyLoadedSorter{}},
 	}
@@ -206,12 +206,7 @@ func (s *SimpleScheduler) scheduleToServer(modelName string) error {
 				continue
 			}
 			candidateReplicas.SortReplicas(s.replicaSorts)
-			// 临时debug用的日志
-			if strings.Contains(modelName, "recapture-segment") {
-				for _, rep := range candidateReplicas.ChosenReplicas {
-					logger.Debugf("candidate replicas: %+v", rep)
-				}
-			}
+
 			err = s.store.UpdateLoadedModels(
 				modelName, latestModel.GetVersion(),
 				candidateServer.Name,
