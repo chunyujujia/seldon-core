@@ -311,6 +311,42 @@ func TestAsModelDetails(t *testing.T) {
 			},
 			error: true,
 		},
+		{
+			name: "with coLocationTag",
+			model: &Model{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "foo",
+					Namespace:       "default",
+					ResourceVersion: "1",
+					Generation:      1,
+				},
+				Spec: ModelSpec{
+					InferenceArtifactSpec: InferenceArtifactSpec{
+						StorageURI: "gs://test",
+					},
+					ScalingSpec:   ScalingSpec{Replicas: &replicas},
+					CoLocationTag: strPtr("group-a"),
+				},
+			},
+			modelpb: &scheduler.Model{
+				Meta: &scheduler.MetaData{
+					Name: "foo",
+					KubernetesMeta: &scheduler.KubernetesMeta{
+						Namespace:  "default",
+						Generation: 1,
+					},
+				},
+				ModelSpec: &scheduler.ModelSpec{
+					Uri:           "gs://test",
+					CoLocationTag: strPtr("group-a"),
+				},
+				DeploymentSpec: &scheduler.DeploymentSpec{
+					Replicas:    4,
+					MinReplicas: 0,
+					MaxReplicas: 0,
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -323,4 +359,8 @@ func TestAsModelDetails(t *testing.T) {
 			}
 		})
 	}
+}
+
+func strPtr(s string) *string {
+	return &s
 }
