@@ -33,5 +33,6 @@ func (f GpuUsageFilter) Filter(model *store.ModelVersion, replica *store.ServerR
 }
 
 func (f GpuUsageFilter) Description(model *store.ModelVersion, replica *store.ServerReplica) string {
-	return fmt.Sprintf("model memory %d replica memory %d", model.GetRequiredMemory(), replica.GetAvailableMemory())
+	loaded := isModelReplicaLoadedOnServerReplica(model, replica)
+	return fmt.Sprintf("gpu usage %f, reserved gpu usage: %f, loaded: %t, affinity: %t", replica.GetGpuUsage(), replica.GetReservedGpuUsage(), loaded, f.affinity)
 }
