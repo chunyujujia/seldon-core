@@ -40,25 +40,28 @@ type ScalerConfig struct {
 	stabilizationWindow   time.Duration
 }
 
-func DefaultScalerConfig(stabilizationWindowSeconds uint64, gpuUsageCordonPercentage float64) ScalerConfig {
+func DefaultScalerConfig(store store.ModelStore, stabilizationWindowSeconds uint64, gpuUsageCordonPercentage float64) ScalerConfig {
 	return ScalerConfig{
 		scaleUpReplicaFilters: []filters.ReplicaFilter{filters.ExplainerFilter{}},
 		replicaFilters:        []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: false}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsageCordonPercentage, false)},
-		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.ModelAlreadyLoadedSorter{}},
+		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewCoLocationAntiAffinitySorter(store), sorters.ModelAlreadyLoadedSorter{}},
 		stabilizationWindow:   time.Duration(stabilizationWindowSeconds) * time.Second,
 	}
 }
 
 type SimulateRecord struct {
-	server         *store.ServerSnapshot
-	reservedMemory map[int]uint64
+	server          *store.ServerSnapshot
+	reservedMemory  map[int]uint64
+	simulatedModels map[int][]store.ModelVersionID // tracks models simulated-as-loaded per replica
 }
 
-func (r *SimulateRecord) Add(replica *store.ServerReplica, memory uint64) {
+func (r *SimulateRecord) Add(replica *store.ServerReplica, memory uint64, mvID store.ModelVersionID) {
 	replica.ReserveMemory(memory)
 	replica.ReserveGpu()
+	replica.SimulateLoadModel(mvID)
 	replicaIdx := replica.GetReplicaIdx()
 	r.reservedMemory[replicaIdx] += memory
+	r.simulatedModels[replicaIdx] = append(r.simulatedModels[replicaIdx], mvID)
 }
 
 func (r *SimulateRecord) ReleaseReservedMemory() {
@@ -66,6 +69,12 @@ func (r *SimulateRecord) ReleaseReservedMemory() {
 		replica := r.server.Replicas[replicaIdx]
 		replica.ReleaseMemory(memory)
 		replica.ReleaseGpu()
+	}
+	for replicaIdx, mvIDs := range r.simulatedModels {
+		replica := r.server.Replicas[replicaIdx]
+		for _, mvID := range mvIDs {
+			replica.RemoveSimulatedModel(mvID)
+		}
 	}
 }
 
@@ -177,7 +186,7 @@ func filterReplicas(filters []filters.ReplicaFilter, model *store.ModelVersion, 
 
 // simulate the process of server replicas scaling down to determine whether there is enough memory
 func (scaler *memoryServerScaler) checkAvaliableMemory(server *store.ServerSnapshot, replicas int) error {
-	simulateRecord := SimulateRecord{server: server, reservedMemory: map[int]uint64{}}
+	simulateRecord := SimulateRecord{server: server, reservedMemory: map[int]uint64{}, simulatedModels: map[int][]store.ModelVersionID{}}
 	defer simulateRecord.ReleaseReservedMemory()
 
 	scaleDownReplicaIdx := server.ExpectedReplicas - 1
@@ -215,7 +224,7 @@ func (scaler *memoryServerScaler) simulateDrainModel(
 ) error {
 	model, err := scaler.store.GetModel(drainModelVersionId.Name)
 	if err != nil {
-		return fmt.Errorf("failed to get mdoel %s", drainModelVersionId.Name)
+		return fmt.Errorf("failed to get model %s", drainModelVersionId.Name)
 	}
 
 	replicaFilters := []filters.ReplicaFilter{
@@ -234,7 +243,7 @@ func (scaler *memoryServerScaler) simulateDrainModel(
 	candidateServer.SortReplicas(scaler.scalerConfig.replicaSorts)
 
 	chosenReplica := candidateServer.ChosenReplicas[0]
-	simulateRecord.Add(chosenReplica, modelVersion.GetRequiredMemory())
+	simulateRecord.Add(chosenReplica, modelVersion.GetRequiredMemory(), drainModelVersionId)
 
 	return nil
 }

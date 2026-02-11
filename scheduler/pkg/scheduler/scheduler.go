@@ -43,10 +43,10 @@ type SchedulerConfig struct {
 	replicaSorts   []sorters.ReplicaSorter
 }
 
-func DefaultSchedulerConfig(store store.ModelStore, gpuUsasgeCordonPercentage float64) SchedulerConfig {
+func DefaultSchedulerConfig(store store.ModelStore, gpuUsageCordonPercentage float64) SchedulerConfig {
 	return SchedulerConfig{
 		serverFilters:  []filters.ServerFilter{filters.ServerReplicaFilter{}, filters.SharingServerFilter{}, filters.DeletedServerFilter{}, filters.ServerRequirementFilter{}},
-		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsasgeCordonPercentage, true)},
+		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsageCordonPercentage, true)},
 		serverSorts:    []sorters.ServerSorter{},
 		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewCoLocationAntiAffinitySorter(store), sorters.ModelAlreadyLoadedSorter{}},
 	}

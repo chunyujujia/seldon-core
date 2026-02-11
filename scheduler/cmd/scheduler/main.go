@@ -198,7 +198,7 @@ func main() {
 	if autoscalingDisabled {
 		scaler = &scheduler.DisabledServerScaler{}
 	} else {
-		scaler = scheduler.NewMemoryServerScaler(ss, scheduler.DefaultScalerConfig(stabilizationWindowSeconds, gpuUsageCordonPercentage), logger)
+		scaler = scheduler.NewMemoryServerScaler(ss, scheduler.DefaultScalerConfig(ss, stabilizationWindowSeconds, gpuUsageCordonPercentage), logger)
 	}
 
 	// Configure Prometheus client using flexible configuration with TLS support

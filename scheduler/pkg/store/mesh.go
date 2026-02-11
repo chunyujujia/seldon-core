@@ -767,6 +767,28 @@ func (s *ServerReplica) ReserveMemory(memBytes uint64) {
 	s.reservedMemory += memBytes
 }
 
+// SimulateLoadModel adds a model version to the replica's loadedModels map
+// for simulation purposes (e.g., during scale-down drain simulation).
+// This ensures that subsequent sorters (like CoLocationAntiAffinitySorter)
+// see accurate replica state when multiple models are drained sequentially.
+// Only use on snapshot replicas, not live replicas.
+func (s *ServerReplica) SimulateLoadModel(mvID ModelVersionID) {
+	s.muLoadedModels.Lock()
+	defer s.muLoadedModels.Unlock()
+	s.loadedModels[mvID] = true
+	s.uniqueLoadedModels[mvID.Name] = true
+}
+
+// RemoveSimulatedModel removes a model version previously added via SimulateLoadModel.
+func (s *ServerReplica) RemoveSimulatedModel(mvID ModelVersionID) {
+	s.muLoadedModels.Lock()
+	defer s.muLoadedModels.Unlock()
+	delete(s.loadedModels, mvID)
+	if !modelExists(s.loadedModels, mvID.Name) {
+		delete(s.uniqueLoadedModels, mvID.Name)
+	}
+}
+
 // ReleaseMemory releases the specified amount of reserved memory
 func (s *ServerReplica) ReleaseMemory(memBytes uint64) {
 	s.muReservedResource.Lock()
