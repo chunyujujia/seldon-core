@@ -681,7 +681,7 @@ type ModelSpec struct {
 	Server          *string                `protobuf:"bytes,6,opt,name=server,proto3,oneof" json:"server,omitempty"`                    // the particular model server to load the model. If unspecified will be chosen.
 	Explainer       *ExplainerSpec         `protobuf:"bytes,7,opt,name=explainer,proto3,oneof" json:"explainer,omitempty"`              // optional black box explainer details
 	Parameters      []*ParameterSpec       `protobuf:"bytes,8,rep,name=parameters,proto3" json:"parameters,omitempty"`                  // parameters to load with model
-	CoLocationTag   *string                `protobuf:"bytes,9,opt,name=coLocationTag,proto3,oneof" json:"coLocationTag,omitempty"`      // optional tag for co-location anti-affinity scheduling
+	SpreadGroup     *string                `protobuf:"bytes,9,opt,name=spreadGroup,proto3,oneof" json:"spreadGroup,omitempty"`          // optional group name for spread scheduling
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -772,9 +772,9 @@ func (x *ModelSpec) GetParameters() []*ParameterSpec {
 	return nil
 }
 
-func (x *ModelSpec) GetCoLocationTag() string {
-	if x != nil && x.CoLocationTag != nil {
-		return *x.CoLocationTag
+func (x *ModelSpec) GetSpreadGroup() string {
+	if x != nil && x.SpreadGroup != nil {
+		return *x.SpreadGroup
 	}
 	return ""
 }
@@ -3560,7 +3560,7 @@ const file_mlops_scheduler_scheduler_proto_rawDesc = "" +
 	"\breplicas\x18\x01 \x01(\rR\breplicas\x12 \n" +
 	"\vminReplicas\x18\x02 \x01(\rR\vminReplicas\x12 \n" +
 	"\vmaxReplicas\x18\x03 \x01(\rR\vmaxReplicas\x12 \n" +
-	"\vlogPayloads\x18\x04 \x01(\bR\vlogPayloads\"\xa3\x04\n" +
+	"\vlogPayloads\x18\x04 \x01(\bR\vlogPayloads\"\x9d\x04\n" +
 	"\tModelSpec\x12\x10\n" +
 	"\x03uri\x18\x01 \x01(\tR\x03uri\x12-\n" +
 	"\x0fartifactVersion\x18\x02 \x01(\rH\x00R\x0fartifactVersion\x88\x01\x01\x12P\n" +
@@ -3571,15 +3571,15 @@ const file_mlops_scheduler_scheduler_proto_rawDesc = "" +
 	"\texplainer\x18\a \x01(\v2%.seldon.mlops.scheduler.ExplainerSpecH\x04R\texplainer\x88\x01\x01\x12E\n" +
 	"\n" +
 	"parameters\x18\b \x03(\v2%.seldon.mlops.scheduler.ParameterSpecR\n" +
-	"parameters\x12)\n" +
-	"\rcoLocationTag\x18\t \x01(\tH\x05R\rcoLocationTag\x88\x01\x01B\x12\n" +
+	"parameters\x12%\n" +
+	"\vspreadGroup\x18\t \x01(\tH\x05R\vspreadGroup\x88\x01\x01B\x12\n" +
 	"\x10_artifactVersionB\x10\n" +
 	"\x0e_storageConfigB\x0e\n" +
 	"\f_memoryBytesB\t\n" +
 	"\a_serverB\f\n" +
 	"\n" +
-	"_explainerB\x10\n" +
-	"\x0e_coLocationTag\"9\n" +
+	"_explainerB\x0e\n" +
+	"\f_spreadGroup\"9\n" +
 	"\rParameterSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"\x88\x01\n" +

@@ -83,7 +83,7 @@ func (f *scalerMockStore) GetAllModels() []string { return nil }
 func strPtr(s string) *string   { return &s }
 func uint64Ptr(v uint64) *uint64 { return &v }
 
-func TestDefaultScalerConfigIncludesCoLocationSorter(t *testing.T) {
+func TestDefaultScalerConfigIncludesSpreadGroupSorter(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	// Use nil store — safe because we only verify sorter composition via Name(),
@@ -94,7 +94,7 @@ func TestDefaultScalerConfigIncludesCoLocationSorter(t *testing.T) {
 	expectedSorterNames := []string{
 		"ReplicaIndexSorter",
 		"AvailableResourceSorter",
-		"CoLocationAntiAffinitySorter",
+		"SpreadGroupSorter",
 		"ModelAlreadyLoadedSorter",
 	}
 
@@ -123,24 +123,24 @@ func TestDefaultScalerAndSchedulerHaveSameReplicaSorterNames(t *testing.T) {
 	}
 }
 
-// TestSimulateDrainDistributesCoLocatedModels verifies that when multiple models
-// with the same coLocationTag are drained from a replica, the simulation distributes
+// TestSimulateDrainDistributesSpreadGroupModels verifies that when multiple models
+// with the same spreadGroup are drained from a replica, the simulation distributes
 // them across different target replicas instead of clustering them together.
 //
 // This tests the fix for stale replica state during multi-model drain: after simulating
 // a model placement on a replica, the model is tracked in that replica's loadedModels
-// so that subsequent CoLocationAntiAffinitySorter calls see accurate state.
-func TestSimulateDrainDistributesCoLocatedModels(t *testing.T) {
+// so that subsequent SpreadGroupSorter calls see accurate state.
+func TestSimulateDrainDistributesSpreadGroupModels(t *testing.T) {
 	g := NewGomegaWithT(t)
 	logger := log.New()
 
 	server := store.NewServer("server1", true)
 
-	// Models with the same coLocationTag "group-a"
+	// Models with the same spreadGroup "group-a"
 	modelM1 := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelM1"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -151,7 +151,7 @@ func TestSimulateDrainDistributesCoLocatedModels(t *testing.T) {
 	modelM2 := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelM2"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -163,7 +163,7 @@ func TestSimulateDrainDistributesCoLocatedModels(t *testing.T) {
 	modelX := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelX"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", MemoryBytes: uint64Ptr(100), SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -183,8 +183,8 @@ func TestSimulateDrainDistributesCoLocatedModels(t *testing.T) {
 		},
 	}
 
-	// Replica 0: has modelX (tag "group-a") — 1 existing co-located model
-	// Replica 1: empty — 0 co-located models
+	// Replica 0: has modelX (tag "group-a") — 1 existing spread-grouped model
+	// Replica 1: empty — 0 spread-grouped models
 	// Replica 2: has modelM1 and modelM2 (both tag "group-a") — being drained
 	//
 	// Scale down from 3 to 2 replicas (drain replica 2).
@@ -192,7 +192,7 @@ func TestSimulateDrainDistributesCoLocatedModels(t *testing.T) {
 	//   - First drain modelM1: replica 1 (0 matches) preferred over replica 0 (1 match) → M1 goes to replica 1
 	//   - Second drain modelM2: replica 1 NOW has 1 match (from simulated M1), replica 0 has 1 match → tie,
 	//     broken by ReplicaIndexSorter (replica 0 preferred) → M2 goes to replica 0
-	// This distributes the co-located models instead of clustering them on replica 1.
+	// This distributes the spread-grouped models instead of clustering them on replica 1.
 
 	serverSnapshot := &store.ServerSnapshot{
 		Name:             "server1",

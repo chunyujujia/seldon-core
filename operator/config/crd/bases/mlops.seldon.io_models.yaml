@@ -47,10 +47,10 @@ spec:
                   A v2 version folder to select from storage bucket
                 format: int32
                 type: integer
-              coLocationTag:
+              spreadGroup:
                 description: |-
-                  Optional tag for co-location anti-affinity scheduling.
-                  Models with the same tag will be scheduled to different replicas when possible.
+                  Optional group name for spread scheduling.
+                  Models with the same spread group will be scheduled to different replicas when possible.
                 type: string
               dedicated:
                 description: |-

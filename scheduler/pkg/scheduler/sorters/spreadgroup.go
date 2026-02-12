@@ -13,28 +13,28 @@ import (
 	"github.com/seldonio/seldon-core/scheduler/v2/pkg/store"
 )
 
-// CoLocationAntiAffinitySorter sorts candidate replicas so that replicas with
-// fewer models sharing the same coLocationTag are preferred. This provides soft
-// anti-affinity: models that are frequently called together (same tag) are
-// spread across different replicas when possible.
-type CoLocationAntiAffinitySorter struct {
+// SpreadGroupSorter sorts candidate replicas so that replicas with
+// fewer models sharing the same spreadGroup are preferred. This provides soft
+// anti-affinity: models in the same spread group are distributed
+// across different replicas when possible.
+type SpreadGroupSorter struct {
 	store store.ModelStore
 }
 
-func NewCoLocationAntiAffinitySorter(store store.ModelStore) CoLocationAntiAffinitySorter {
-	return CoLocationAntiAffinitySorter{store: store}
+func NewSpreadGroupSorter(store store.ModelStore) SpreadGroupSorter {
+	return SpreadGroupSorter{store: store}
 }
 
-func (c CoLocationAntiAffinitySorter) Name() string {
-	return "CoLocationAntiAffinitySorter"
+func (c SpreadGroupSorter) Name() string {
+	return "SpreadGroupSorter"
 }
 
 // IsLess returns true if candidate i is preferred over candidate j.
-// A replica with fewer co-located tag matches is preferred (lower count = better).
-// If the model being scheduled has no coLocationTag (nil or empty string),
+// A replica with fewer spread group matches is preferred (lower count = better).
+// If the model being scheduled has no spreadGroup (nil or empty string),
 // this sorter is a no-op and returns false (equal preference).
-func (c CoLocationAntiAffinitySorter) IsLess(i *CandidateReplica, j *CandidateReplica) bool {
-	tag := i.Model.GetModelSpec().GetCoLocationTag()
+func (c SpreadGroupSorter) IsLess(i *CandidateReplica, j *CandidateReplica) bool {
+	tag := i.Model.GetModelSpec().GetSpreadGroup()
 	if tag == "" {
 		return false
 	}
@@ -45,8 +45,8 @@ func (c CoLocationAntiAffinitySorter) IsLess(i *CandidateReplica, j *CandidateRe
 }
 
 // countMatchingTags counts how many models loaded (or loading) on the given
-// replica share the specified coLocationTag.
-func (c CoLocationAntiAffinitySorter) countMatchingTags(replica *store.ServerReplica, tag string) int {
+// replica share the specified spreadGroup.
+func (c SpreadGroupSorter) countMatchingTags(replica *store.ServerReplica, tag string) int {
 	count := 0
 	for _, mvID := range replica.GetLoadedOrLoadingModelVersions() {
 		modelSnapshot, err := c.store.GetModel(mvID.Name)
@@ -57,7 +57,7 @@ func (c CoLocationAntiAffinitySorter) countMatchingTags(replica *store.ServerRep
 		if mv == nil {
 			continue
 		}
-		otherTag := mv.GetModelSpec().GetCoLocationTag()
+		otherTag := mv.GetModelSpec().GetSpreadGroup()
 		if otherTag == tag {
 			count++
 		}

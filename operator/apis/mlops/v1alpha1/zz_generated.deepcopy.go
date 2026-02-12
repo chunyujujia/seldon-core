@@ -437,8 +437,8 @@ func (in *ModelSpec) DeepCopyInto(out *ModelSpec) {
 		*out = make([]ParameterSpec, len(*in))
 		copy(*out, *in)
 	}
-	if in.CoLocationTag != nil {
-		in, out := &in.CoLocationTag, &out.CoLocationTag
+	if in.SpreadGroup != nil {
+		in, out := &in.SpreadGroup, &out.SpreadGroup
 		*out = new(string)
 		**out = **in
 	}

@@ -77,7 +77,7 @@ func strPtr(s string) *string {
 	return &s
 }
 
-func TestCoLocationAntiAffinitySorter(t *testing.T) {
+func TestSpreadGroupSorter(t *testing.T) {
 	g := NewGomegaWithT(t)
 
 	type test struct {
@@ -88,11 +88,11 @@ func TestCoLocationAntiAffinitySorter(t *testing.T) {
 
 	server := store.NewServer("server1", true)
 
-	// Create models with co-location tags
+	// Create models with spread groups
 	modelA := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelA"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -103,7 +103,7 @@ func TestCoLocationAntiAffinitySorter(t *testing.T) {
 	modelB := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelB"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -114,7 +114,7 @@ func TestCoLocationAntiAffinitySorter(t *testing.T) {
 	modelC := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "modelC"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", CoLocationTag: strPtr("group-b")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", SpreadGroup: strPtr("group-b")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -138,7 +138,7 @@ func TestCoLocationAntiAffinitySorter(t *testing.T) {
 	schedulingModel := store.NewModelVersion(
 		&pb.Model{
 			Meta:      &pb.MetaData{Name: "schedulingModel"},
-			ModelSpec: &pb.ModelSpec{Uri: "gs://test", CoLocationTag: strPtr("group-a")},
+			ModelSpec: &pb.ModelSpec{Uri: "gs://test", SpreadGroup: strPtr("group-a")},
 		},
 		1, "server1",
 		map[int]store.ReplicaStatus{},
@@ -258,7 +258,7 @@ func TestCoLocationAntiAffinitySorter(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			sorter := NewCoLocationAntiAffinitySorter(fakeStore)
+			sorter := NewSpreadGroupSorter(fakeStore)
 			sort.SliceStable(test.replicas, func(i, j int) bool {
 				return sorter.IsLess(test.replicas[i], test.replicas[j])
 			})

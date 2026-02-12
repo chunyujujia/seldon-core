@@ -48,7 +48,7 @@ func DefaultSchedulerConfig(store store.ModelStore, gpuUsageCordonPercentage flo
 		serverFilters:  []filters.ServerFilter{filters.ServerReplicaFilter{}, filters.SharingServerFilter{}, filters.DeletedServerFilter{}, filters.ServerRequirementFilter{}},
 		replicaFilters: []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: true}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsageCordonPercentage, true)},
 		serverSorts:    []sorters.ServerSorter{},
-		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewCoLocationAntiAffinitySorter(store), sorters.ModelAlreadyLoadedSorter{}},
+		replicaSorts:   []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewSpreadGroupSorter(store), sorters.ModelAlreadyLoadedSorter{}},
 	}
 }
 

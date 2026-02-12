@@ -44,10 +44,10 @@ type ModelSpec struct {
 	Explainer *ExplainerSpec `json:"explainer,omitempty"`
 	// Parameters to load with model
 	Parameters []ParameterSpec `json:"parameters,omitempty"`
-	// Optional tag for co-location anti-affinity scheduling.
-	// Models with the same tag will be scheduled to different replicas when possible.
+	// Optional group name for spread scheduling.
+	// Models with the same spread group will be scheduled to different replicas when possible.
 	// +optional
-	CoLocationTag *string `json:"coLocationTag,omitempty"`
+	SpreadGroup *string `json:"spreadGroup,omitempty"`
 }
 
 type ParameterSpec struct {
@@ -182,7 +182,7 @@ func (m Model) AsSchedulerModel() (*scheduler.Model, error) {
 			ArtifactVersion: m.Spec.ArtifactVersion,
 			Requirements:    m.Spec.Requirements,
 			Server:          m.Spec.Server,
-			CoLocationTag:   m.Spec.CoLocationTag,
+			SpreadGroup:     m.Spec.SpreadGroup,
 		},
 		DeploymentSpec: &scheduler.DeploymentSpec{
 			LogPayloads: m.Spec.Logger != nil, // Simple boolean switch at present

@@ -44,7 +44,7 @@ func DefaultScalerConfig(store store.ModelStore, stabilizationWindowSeconds uint
 	return ScalerConfig{
 		scaleUpReplicaFilters: []filters.ReplicaFilter{filters.ExplainerFilter{}},
 		replicaFilters:        []filters.ReplicaFilter{filters.AvailableMemoryReplicaFilter{Affinity: false}, filters.ExplainerFilter{}, filters.ReplicaDrainingFilter{}, filters.NewGpuUsageFilter(gpuUsageCordonPercentage, false)},
-		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewCoLocationAntiAffinitySorter(store), sorters.ModelAlreadyLoadedSorter{}},
+		replicaSorts:          []sorters.ReplicaSorter{sorters.ReplicaIndexSorter{}, sorters.AvailableResourceSorter{}, sorters.NewSpreadGroupSorter(store), sorters.ModelAlreadyLoadedSorter{}},
 		stabilizationWindow:   time.Duration(stabilizationWindowSeconds) * time.Second,
 	}
 }

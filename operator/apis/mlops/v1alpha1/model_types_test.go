@@ -312,7 +312,7 @@ func TestAsModelDetails(t *testing.T) {
 			error: true,
 		},
 		{
-			name: "with coLocationTag",
+			name: "with spreadGroup",
 			model: &Model{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:            "foo",
@@ -325,7 +325,7 @@ func TestAsModelDetails(t *testing.T) {
 						StorageURI: "gs://test",
 					},
 					ScalingSpec:   ScalingSpec{Replicas: &replicas},
-					CoLocationTag: strPtr("group-a"),
+					SpreadGroup: strPtr("group-a"),
 				},
 			},
 			modelpb: &scheduler.Model{
@@ -338,7 +338,7 @@ func TestAsModelDetails(t *testing.T) {
 				},
 				ModelSpec: &scheduler.ModelSpec{
 					Uri:           "gs://test",
-					CoLocationTag: strPtr("group-a"),
+					SpreadGroup: strPtr("group-a"),
 				},
 				DeploymentSpec: &scheduler.DeploymentSpec{
 					Replicas:    4,

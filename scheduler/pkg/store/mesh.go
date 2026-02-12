@@ -769,7 +769,7 @@ func (s *ServerReplica) ReserveMemory(memBytes uint64) {
 
 // SimulateLoadModel adds a model version to the replica's loadedModels map
 // for simulation purposes (e.g., during scale-down drain simulation).
-// This ensures that subsequent sorters (like CoLocationAntiAffinitySorter)
+// This ensures that subsequent sorters (like SpreadGroupSorter)
 // see accurate replica state when multiple models are drained sequentially.
 // Only use on snapshot replicas, not live replicas.
 func (s *ServerReplica) SimulateLoadModel(mvID ModelVersionID) {

@@ -44,7 +44,7 @@ message ModelSpec {
   optional string server = 6; // the particular model server to load the model. If unspecified will be chosen.
   optional ExplainerSpec explainer = 7; // optional black box explainer details
   repeated ParameterSpec parameters = 8; // parameters to load with model
-  optional string coLocationTag = 9; // optional tag for co-location anti-affinity scheduling
+  optional string spreadGroup = 9; // optional group name for spread scheduling
 }
 
 message ParameterSpec {
